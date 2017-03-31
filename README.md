@@ -1,7 +1,11 @@
 # cuba-sample-board
 Cuba Platform project example for Nginx proxy
 
-The application has configured in CUBA Studio: Menu - Edit - Advanced - Module Prefix set to 'board'. CUBA application is accessible at http://localhost/
+The application was configured in the Studio: 
+
+    Project Properties - Edit - Advanced - Modules prefix: board
+    
+CUBA application is accessible at http://localhost/
 
 nginx.conf part:
 ```
