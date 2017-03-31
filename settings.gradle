@@ -1,0 +1,6 @@
+rootProject.name = 'cuba-sample-board'
+include(':board-global', ':board-core', ':board-gui', ':board-web')
+project(':board-global').projectDir = new File(settingsDir, 'modules/global')
+project(':board-core').projectDir = new File(settingsDir, 'modules/core')
+project(':board-gui').projectDir = new File(settingsDir, 'modules/gui')
+project(':board-web').projectDir = new File(settingsDir, 'modules/web')

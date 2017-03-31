@@ -1,0 +1,202 @@
+
+buildscript {
+    ext.cubaVersion = '6.4.2'
+    repositories {
+        maven {
+            url 'https://repo.cuba-platform.com/content/groups/work'
+            credentials {
+                username(rootProject.hasProperty('repoUser') ? rootProject['repoUser'] : 'cuba')
+                password(rootProject.hasProperty('repoPass') ? rootProject['repoPass'] : 'cuba123')
+            }
+        }
+        
+    }
+    dependencies {
+        classpath "com.haulmont.gradle:cuba-plugin:$cubaVersion"
+
+        classpath "com.haulmont.cuba:cuba-global:$cubaVersion"
+
+        
+    }
+}
+
+def globalModule = project(':board-global')
+def coreModule = project(':board-core')
+def guiModule = project(':board-gui')
+def webModule = project(':board-web')
+
+def servletApi = 'org.apache.tomcat:tomcat-servlet-api:8.0.26'
+
+
+apply(plugin: 'idea')
+apply(plugin: 'cuba')
+
+cuba {
+    artifact {
+        group = 'com.company.cubasampleboard'
+        version = '0.1'
+        isSnapshot = true
+    }
+    tomcat {
+        dir = "$project.rootDir/deploy/tomcat"
+    }
+}
+
+def hsql = 'org.hsqldb:hsqldb:2.2.9'
+
+configure([globalModule, coreModule, guiModule, webModule]) {
+    apply(plugin: 'java')
+    apply(plugin: 'maven')
+    apply(plugin: 'idea')
+    apply(plugin: 'cuba')
+
+    dependencies {
+        testCompile('junit:junit:4.12')
+    }
+
+    task sourceJar(type: Jar) {
+        from file('src')
+        classifier = 'sources'
+    }
+
+    artifacts {
+        archives sourceJar
+    }
+}
+
+configure(globalModule) {
+    task enhance(type: CubaEnhancing)
+    
+    
+}
+
+configure(coreModule) {
+
+    configurations {
+        jdbc
+        dbscripts
+    }
+
+    dependencies {
+        compile(globalModule)
+        provided(servletApi)
+        jdbc(hsql)
+        testRuntime(hsql)
+
+    }
+
+    task cleanConf(description: 'Cleans up conf directory') << {
+        def dir = new File(cuba.tomcat.dir, '/conf/board-core')
+        if (dir.isDirectory()) {
+            ant.delete(includeemptydirs: true) {
+                fileset(dir: dir, includes: '**/*', excludes: 'local.app.properties')
+            }
+        }
+    }
+
+    task deploy(dependsOn: [assemble, cleanConf], type: CubaDeployment) {
+        appName = 'board-core'
+        appJars('board-global', 'board-core')
+    }
+
+    task createDb(dependsOn: assembleDbScripts, description: 'Creates local database', type: CubaDbCreation) {
+        dbms = 'hsql'
+        host = 'localhost'
+        dbName = 'cubasampleboard'
+        dbUser = 'sa'
+        dbPassword = ''
+    }
+
+    task updateDb(dependsOn: assembleDbScripts, description: 'Updates local database', type: CubaDbUpdate) {
+        dbms = 'hsql'
+        host = 'localhost'
+        dbName = 'cubasampleboard'
+        dbUser = 'sa'
+        dbPassword = ''
+    }
+}
+
+configure(guiModule) {
+    dependencies {
+        compile(globalModule)
+
+    }
+
+    task deployConf(type: Copy) {
+        from file('src')
+        include "com/company/cubasampleboard/**"
+        into "$cuba.tomcat.dir/conf/board"
+    }
+}
+
+configure(webModule) {
+    configurations {
+        webcontent
+    }
+
+    dependencies {
+        provided(servletApi)
+        compile(guiModule)
+
+    }
+    
+    task webArchive(type: Zip) {
+        from file("$buildDir/web")
+        from file('web')
+        classifier = 'web'
+    }
+
+    artifacts {
+        archives webArchive
+    }
+
+    task deployConf(type: Copy) {
+        from file('src')
+        include "com/company/cubasampleboard/**"
+        into "$cuba.tomcat.dir/conf/board"
+    }
+
+    task clearMessagesCache(type: CubaClearMessagesCache) {
+        appName = 'board'
+    }
+    deployConf.dependsOn clearMessagesCache
+
+    task cleanConf(description: 'Cleans up conf directory') << {
+        def dir = new File(cuba.tomcat.dir, '/conf/board')
+        if (dir.isDirectory()) {
+            ant.delete(includeemptydirs: true) {
+                fileset(dir: dir, includes: '**/*', excludes: 'local.app.properties')
+            }
+        }
+    }
+
+    task deploy(dependsOn: [assemble, cleanConf], type: CubaDeployment) {
+        appName = 'board'
+        appJars('board-global', 'board-gui', 'board-web')
+    }
+}
+
+
+
+
+
+task undeploy(type: Delete, dependsOn: ':board-web:cleanConf') {
+    delete("$cuba.tomcat.dir/shared")
+    delete("$cuba.tomcat.dir/webapps/board-core")
+    delete("$cuba.tomcat.dir/webapps/board")
+}
+
+task restart(dependsOn: ['stop', ':board-core:deploy', ':board-web:deploy'], description: 'Redeploys applications and restarts local Tomcat') << {
+    ant.waitfor(maxwait: 6, maxwaitunit: 'second', checkevery: 2, checkeveryunit: 'second') {
+        not {
+            socket(server: 'localhost', port: '8787')
+        }
+    }
+    start.execute()
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '3.1'
+}
+
+apply from: 'extra.gradle'
