@@ -25,3 +25,4 @@ location /board {
     proxy_set_header Connection "upgrade";
 }
 ```
+test
